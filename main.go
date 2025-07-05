@@ -68,7 +68,33 @@ func main() {
 	}
 	fmt.Printf("Hello")
 	router := chi.NewRouter()
+
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
+
+			if r.Method == "OPTIONS" {
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	router.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Ping endpoint hit")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("pong"))
+	})
+
 	authHandler := handlers.NewAuthHandler(db)
+	router.Route("/api/auth", func(r chi.Router) {
+		r.Post("/signup", authHandler.Signup)
+		r.Post("/login", authHandler.Login)
+	})
+
 	kubeClient := getKubernetesClient()
 	if kubeClient == nil {
 		log.Println("Warning: Kubernetes client not available - load test features disabled")
@@ -76,13 +102,7 @@ func main() {
 	loadTestController := controller.NewLoadTestController(kubeClient, "loadtest")
 	loadTestHandler := handlers.NewLoadTestHandler(db, loadTestController)
 
-	router.Mount("/api/auth", authHandler.Routes())
 	router.Mount("/api/v1/loadtests", loadTestHandler.Routes())
-
-	router.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Ping endpoint hit")
-		w.Write([]byte("pong"))
-	})
 
 	serv := http.Server{
 		Addr:    ":" + getEnv("PORT", "8080"),
