@@ -22,12 +22,16 @@ spec:
         - name: POSTGRES_USER
           value: postgres
         - name: POSTGRES_PASSWORD
-          value: your-secure-database-password
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: password
         ports:
         - containerPort: 5432
         volumeMounts:
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data
+          subPath: postgres
       volumes:
       - name: postgres-storage
         hostPath:
