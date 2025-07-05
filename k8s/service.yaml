@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: loadtest-api-service
+  namespace: loadtest
+spec:
+  selector:
+    app: loadtest-api
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: loadtest-ingress
+  namespace: loadtest
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: loadtest.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: loadtest-api-service
+            port:
+              number: 80

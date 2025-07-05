@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadtest-api
+  namespace: loadtest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: loadtest-api
+  template:
+    metadata:
+      labels:
+        app: loadtest-api
+    spec:
+      serviceAccount: loadtest-api  
+      containers:
+      - name: api
+        image: vinayak9769/loadtest-api:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: "postgres"
+        - name: DB_NAME
+          value: "loadtest"
+        - name: DB_SSLMODE
+          value: "disable"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: password
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: api-secret
+              key: jwt-secret
+        - name: LOADTEST_NAMESPACE
+          value: "loadtest"
+        - name: WORKER_IMAGE
+          value: "vinayak9769/loadtest-worker:latest"
+        - name: PORT
+          value: "8080"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5

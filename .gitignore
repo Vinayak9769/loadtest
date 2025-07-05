@@ -1,0 +1,136 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+loadagg
+loadtest  # Add your main binary name
+
+# Test binaries, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.staging
+
+# Database
+*.db
+*.sqlite
+*.sql.backup
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Go vendor directory
+vendor/
+
+# ==== MISSING ITEMS TO ADD ====
+
+# Kubernetes config files (if you have local ones)
+kubeconfig
+*.kubeconfig
+.kube/
+
+# Docker-related (if you have local docker-compose overrides)
+docker-compose.override.yml
+.dockerignore
+
+# Database migration state
+*.sql~
+migration_state/
+
+# JWT keys and certificates
+*.key
+*.pem
+*.crt
+*.p12
+jwt-key*
+private-key*
+public-key*
+
+# Configuration files with secrets
+config.yaml
+config.json
+secrets.yaml
+secrets.json
+
+# Local development files
+tmp/
+temp/
+.tmp/
+*.pid
+
+# Go module cache (usually global, but just in case)
+go.sum.backup
+
+# Air live reload (if you use it)
+.air.toml
+tmp/
+
+# Database dumps and backups
+*.dump
+*.backup
+*.bak
+
+# Local testing artifacts
+test-results/
+coverage.html
+coverage.out
+
+# Local scripts with credentials
+deploy.sh
+setup-local.sh
+*-local.*
+
+# Terraform state (if you add infrastructure)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Helm charts values with secrets (if you add Helm)
+values-local.yaml
+values-dev.yaml
+values-prod.yaml
+
+# Local container registry credentials
+.docker/config.json
+
+# Load test results and reports
+results/
+reports/
+*.csv
+*.json.results
+
+# Debug and profiling files
+debug
+*.prof
+*.trace
+
+# Local SSL certificates
+ssl/
+certs/
+tls/
+
+minikube-linux-amd64
