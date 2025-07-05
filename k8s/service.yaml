@@ -20,7 +20,7 @@ metadata:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
-  - host: loadtest.yourdomain.com
+  - host: vinayak9769.tech
     http:
       paths:
       - path: /
