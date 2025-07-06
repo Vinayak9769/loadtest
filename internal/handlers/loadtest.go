@@ -34,13 +34,15 @@ func (h *LoadTestHandler) Routes() chi.Router {
 
 	r.Use(auth.JWTMiddleware)
 
-	r.Post("/", h.CreateLoadTest)           // POST /api/v1/loadtests
-	r.Get("/", h.ListLoadTests)             // GET /api/v1/loadtests
-	r.Get("/{id}", h.GetLoadTest)           // GET /api/v1/loadtests/{id}
-	r.Get("/{id}/status", h.GetLoadTestStatus) // GET /api/v1/loadtests/{id}/status
-	r.Delete("/{id}", h.StopLoadTest)       // DELETE /api/v1/loadtests/{id}
-	r.Post("/{id}/stop", h.StopLoadTest)    // POST /api/v1/loadtests/{id}/stop
-	r.Post("/cleanup", h.CleanupJobs)       // POST /api/v1/loadtests/cleanup
+	r.Post("/", h.CreateLoadTest)
+	r.Get("/", h.ListLoadTests)
+	r.Get("/{id}", h.GetLoadTest)
+	r.Get("/{id}/status", h.GetLoadTestStatus)
+	r.Get("/{id}/metrics", h.GetLoadTestMetrics)     // NEW: Get current metrics
+	r.Get("/{id}/metrics/stream", h.StreamMetrics)   // NEW: Stream metrics via SSE
+	r.Delete("/{id}", h.StopLoadTest)
+	r.Post("/{id}/stop", h.StopLoadTest)
+	r.Post("/cleanup", h.CleanupJobs)
 
 	return r
 }
@@ -192,6 +194,75 @@ func (h *LoadTestHandler) CleanupJobs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Cleanup completed successfully"})
+}
+
+// Get current metrics for a load test /api/v1/loadtests/{id}/metrics
+func (h *LoadTestHandler) GetLoadTestMetrics(w http.ResponseWriter, r *http.Request) {
+	testID := chi.URLParam(r, "id")
+	userID := h.getUserIDFromContext(r)
+
+	if !h.userOwnsTest(testID, userID) {
+		http.Error(w, "Load test not found", http.StatusNotFound)
+		return
+	}
+
+	metrics, err := h.controller.GetLoadTestMetrics(r.Context(), testID)
+	if err != nil {
+		http.Error(w, "Failed to get load test metrics", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(metrics)
+}
+
+// Stream real-time metrics /api/v1/loadtests/{id}/metrics/stream
+func (h *LoadTestHandler) StreamMetrics(w http.ResponseWriter, r *http.Request) {
+    testID := chi.URLParam(r, "id")
+    userID := h.getUserIDFromContext(r)
+
+    if !h.userOwnsTest(testID, userID) {
+        http.Error(w, "Load test not found", http.StatusNotFound)
+        return
+    }
+
+    // SSE headers
+    w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+
+    metricsChan, err := h.controller.StreamLoadTestMetrics(r.Context(), testID)
+    if err != nil {
+        http.Error(w, "Failed to start metrics stream", http.StatusInternalServerError)
+        return
+    }
+
+    flusher, ok := w.(http.Flusher)
+    if !ok {
+        http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+        return
+    }
+
+    for {
+        select {
+        case metrics, ok := <-metricsChan:
+            if !ok {
+                return // closed
+            }
+
+            data, err := json.Marshal(metrics)
+            if err != nil {
+                continue
+            }
+
+            fmt.Fprintf(w, "data: %s\n\n", data)
+            flusher.Flush()
+
+        case <-r.Context().Done():
+            return
+        }
+    }
 }
 
 type CreateLoadTestRequest struct {

@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var secretKey []byte
 
 func init() {
-	//godotenv.Load() // Load environment variables from .env file
+	// godotenv.Load() // Load environment variables from .env file
 	key := os.Getenv("JWT_SECRET")
 	if key == "" {
 		panic("JWT_SECRET environment variable is required")
