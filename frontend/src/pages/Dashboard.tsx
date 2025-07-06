@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Zap, Plus, Calendar, Clock, Target, Activity, BarChart3, AlertCircle, CheckCircle, XCircle, LogOut, RefreshCw, Eye } from 'lucide-react';
 import { getAuthToken, removeAuthToken } from '../utils/auth';
+import NewTestModal from '../components/NewTestModal';
 
 interface LoadTestConfig {
   duration: number;
@@ -30,6 +31,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onViewMetrics }) => {
   const [loadTests, setLoadTests] = useState<LoadTest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isNewTestModalOpen, setIsNewTestModalOpen] = useState(false);
 
   const fetchLoadTests = async () => {
     setIsLoading(true);
@@ -205,9 +207,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onViewMetrics }) => {
         {/* Action Bar */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-extralight text-white tracking-tight">Recent Tests</h2>
-          <button className="bg-white text-white hover:bg-gray-200 transition-colors font-extralight py-3 px-6 rounded-none border border-white/10 flex items-center space-x-2">
+          <button
+            onClick={() => setIsNewTestModalOpen(true)}
+            className="bg-white text-white hover:bg-gray-200 transition-colors font-extralight py-2 px-4 rounded-none border border-white/10 flex items-center space-x-2"
+          >
             <Plus className="h-4 w-4" />
-            <span className="text-white font-extralight">New Test</span>
+            <span>New Test</span>
           </button>
         </div>
 
@@ -306,6 +311,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onViewMetrics }) => {
             )}
           </div>
         )}
+
+        <NewTestModal
+          isOpen={isNewTestModalOpen}
+          onClose={() => setIsNewTestModalOpen(false)}
+          onTestCreated={() => {
+            setIsNewTestModalOpen(false);
+            fetchLoadTests();
+          }}
+          onLogout={onLogout}
+        />
       </main>
     </div>
   );
