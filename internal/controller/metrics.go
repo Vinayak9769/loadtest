@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Vinayak9769/loadagg/pkg/models"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -72,12 +73,32 @@ func (c *LoadTestController) GetLoadTestMetrics(ctx context.Context, testID stri
 		errorRate = (float64(failedRequests) / float64(totalRequests)) * 100
 	}
 
-	var rps float64
-	if len(workerMetrics) > 0 && workerMetrics[0].LastUpdate.After(time.Time{}) {
-		elapsed := time.Since(workerMetrics[0].LastUpdate).Seconds()
-		if elapsed > 0 {
-			rps = float64(totalRequests) / elapsed
+	jobName := fmt.Sprintf("loadtest-%s", testID)
+	job, err := c.kubeClient.BatchV1().Jobs(c.namespace).Get(ctx, jobName, metav1.GetOptions{})
+
+	var actualElapsed float64
+	var isCompleted bool
+
+	if err == nil && job.Status.StartTime != nil {
+		startTime := job.Status.StartTime.Time
+
+		for _, condition := range job.Status.Conditions {
+			if (condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed) &&
+				condition.Status == corev1.ConditionTrue {
+				isCompleted = true
+				actualElapsed = condition.LastTransitionTime.Time.Sub(startTime).Seconds()
+				break
+			}
 		}
+
+		if !isCompleted {
+			actualElapsed = time.Since(startTime).Seconds()
+		}
+	}
+
+	var rps float64
+	if actualElapsed > 0 {
+		rps = float64(totalRequests) / actualElapsed
 	}
 
 	summary := models.AggregatedMetrics{
@@ -159,9 +180,6 @@ func (c *LoadTestController) extractMetricsFromPod(ctx context.Context, podName 
 
 	return lastMetrics, nil
 }
-
-
-
 
 func (c *LoadTestController) StreamLoadTestMetrics(ctx context.Context, testID string) (<-chan *models.MetricsSnapshot, error) {
 	metricsChan := make(chan *models.MetricsSnapshot, 10)

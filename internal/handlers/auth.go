@@ -80,14 +80,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
-	token, err := auth.GenerateJWT(user.ID)
+	token, err := auth.GenerateJWT(user.ID, user.Username) 
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	response := AuthResponse{
 		Token: token,
-		User:  user.ID,
+		User:  user.Username,  
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -120,14 +120,14 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	token, err := auth.GenerateJWT(user.ID)
+	token, err := auth.GenerateJWT(user.ID, user.Username)  
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	response := AuthResponse{
 		Token: token,
-		User:  req.Username,
+		User:  user.Username,  
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

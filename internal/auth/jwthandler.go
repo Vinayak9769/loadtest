@@ -20,11 +20,12 @@ func init() {
 	secretKey = []byte(key)
 }
 
-func GenerateJWT(userID string) (string, error) {
+func GenerateJWT(userID string, username string) (string, error) {
 	claims := jwt.MapClaims{
-		"ID": userID,
-		"exp": time.Now().Add(24*time.Hour).Unix(),
-		"iat": time.Now().Unix(),            	
+		"ID":       userID,
+		"username": username,  
+		"exp":      time.Now().Add(24*time.Hour).Unix(),
+		"iat":      time.Now().Unix(),            	
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

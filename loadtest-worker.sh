@@ -1,12 +1,10 @@
-#!/bin/sh
+#!/bin/bash
 echo "Starting load test worker"
 echo "Test ID: $TEST_ID"
 echo "Target URL: $TARGET_URL"
 echo "Duration: $DURATION_SECONDS seconds"
 echo "Requests per second: $REQUESTS_PER_SEC"
 echo "HTTP Method: $HTTP_METHOD"
-echo "HTTP Headers: $(echo "$HTTP_HEADERS" | tr '\n' ' ')"  
-echo "HTTP Body: $HTTP_BODY"
 
 apk add --no-cache bc jq >/dev/null 2>&1
 
@@ -82,27 +80,28 @@ EOF
     fi
 }
 
-HEADER_ARGS=()
-if [ -n "$HTTP_HEADERS" ]; then
-    IFS=$'\n'
-    for header in $(echo "$HTTP_HEADERS"); do
-        HEADER_ARGS+=("-H" "$header")
-    done
-    unset IFS
-fi
-
 while [ $(date +%s) -lt $END_TIME ]; do
     COUNTER=$((COUNTER + 1))
 
-    if [ -n "$HTTP_METHOD" ] && [ "$HTTP_METHOD" != "GET" ]; then
-        if [ -n "$HTTP_BODY" ]; then
-            RESPONSE=$(curl -s -w "%{http_code},%{time_total}" -X "$HTTP_METHOD" "${HEADER_ARGS[@]}" -d "$HTTP_BODY" "$TARGET_URL" -o /dev/null)
-        else
-            RESPONSE=$(curl -s -w "%{http_code},%{time_total}" -X "$HTTP_METHOD" "${HEADER_ARGS[@]}" "$TARGET_URL" -o /dev/null)
-        fi
-    else
-        RESPONSE=$(curl -s -w "%{http_code},%{time_total}" "${HEADER_ARGS[@]}" "$TARGET_URL" -o /dev/null)
+    # Handle headers safely
+    HEADER_ARGS=()
+    if [ -n "$HTTP_HEADERS" ]; then
+        while IFS= read -r line; do
+            HEADER_ARGS+=("-H" "$line")
+        done <<< "$(echo -e "$HTTP_HEADERS")"
     fi
+
+    # Build curl args
+    CURL_ARGS=(-s -w "%{http_code},%{time_total}" -o /dev/null "${HEADER_ARGS[@]}" "$TARGET_URL")
+
+    if [ -n "$HTTP_METHOD" ] && [ "$HTTP_METHOD" != "GET" ]; then
+        CURL_ARGS=(-X "$HTTP_METHOD" "${CURL_ARGS[@]}")
+        if [ -n "$HTTP_BODY" ]; then
+            CURL_ARGS=(-d "$HTTP_BODY" "${CURL_ARGS[@]}")
+        fi
+    fi
+
+    RESPONSE=$(curl "${CURL_ARGS[@]}")
 
     STATUS_CODE=$(echo "$RESPONSE" | cut -d',' -f1)
     RESPONSE_TIME=$(echo "$RESPONSE" | cut -d',' -f2)
@@ -124,11 +123,11 @@ while [ $(date +%s) -lt $END_TIME ]; do
 
     TOTAL_RESPONSE_TIME=$(echo "$TOTAL_RESPONSE_TIME + $RESPONSE_TIME" | bc -l)
 
-    if [ -z "$MIN_RESPONSE_TIME" ] || [ $(echo "$RESPONSE_TIME < $MIN_RESPONSE_TIME" | bc -l) -eq 1 ]; then
+    if [ -z "$MIN_RESPONSE_TIME" ] || [ "$(echo "$RESPONSE_TIME < $MIN_RESPONSE_TIME" | bc -l)" -eq 1 ]; then
         MIN_RESPONSE_TIME=$RESPONSE_TIME
     fi
 
-    if [ $(echo "$RESPONSE_TIME > $MAX_RESPONSE_TIME" | bc -l) -eq 1 ]; then
+    if [ "$(echo "$RESPONSE_TIME > $MAX_RESPONSE_TIME" | bc -l)" -eq 1 ]; then
         MAX_RESPONSE_TIME=$RESPONSE_TIME
     fi
 

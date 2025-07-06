@@ -32,17 +32,21 @@ func NewLoadTestHandler(db *sql.DB, controller *controller.LoadTestController) *
 func (h *LoadTestHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 
-	r.Use(auth.JWTMiddleware)
-
-	r.Post("/", h.CreateLoadTest)
-	r.Get("/", h.ListLoadTests)
-	r.Get("/{id}", h.GetLoadTest)
-	r.Get("/{id}/status", h.GetLoadTestStatus)
-	r.Get("/{id}/metrics", h.GetLoadTestMetrics)     // NEW: Get current metrics
-	r.Get("/{id}/metrics/stream", h.StreamMetrics)   // NEW: Stream metrics via SSE
-	r.Delete("/{id}", h.StopLoadTest)
-	r.Post("/{id}/stop", h.StopLoadTest)
-	r.Post("/cleanup", h.CleanupJobs)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTMiddleware)
+		
+		r.Post("/", h.CreateLoadTest)
+		r.Get("/", h.ListLoadTests)
+		r.Get("/{id}", h.GetLoadTest)
+		r.Get("/{id}/status", h.GetLoadTestStatus)
+		r.Get("/{id}/metrics", h.GetLoadTestMetrics)     
+		r.Delete("/{id}", h.StopLoadTest)
+		r.Post("/{id}/stop", h.StopLoadTest)
+		r.Post("/cleanup", h.CleanupJobs)
+	})
+	//seperate from auth headers
+	r.Get("/{id}/metrics/stream", h.StreamMetrics)
+	r.Get("/pod/{podId}/logs/stream", h.StreamPodLogs)
 
 	return r
 }
@@ -216,21 +220,38 @@ func (h *LoadTestHandler) GetLoadTestMetrics(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(metrics)
 }
 
-// Stream real-time metrics /api/v1/loadtests/{id}/metrics/stream
+// Stream real-time metrics /api/v1/loadtests/{id}/metrics/stream?token=JWT_TOKEN
 func (h *LoadTestHandler) StreamMetrics(w http.ResponseWriter, r *http.Request) {
     testID := chi.URLParam(r, "id")
-    userID := h.getUserIDFromContext(r)
+    
+    token := r.URL.Query().Get("token")
+    if token == "" {
+        http.Error(w, "Token is required", http.StatusUnauthorized)
+        return
+    }
+    
+    userID, err := auth.ValidateJWT(token)
+    if err != nil {
+        http.Error(w, "Invalid token", http.StatusUnauthorized)
+        return
+    }
 
     if !h.userOwnsTest(testID, userID) {
         http.Error(w, "Load test not found", http.StatusNotFound)
         return
     }
 
+    //  CORS headers for SSE
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Headers", "Cache-Control, Connection")
+    w.Header().Set("Access-Control-Expose-Headers", "Cache-Control, Connection")
+    w.Header().Set("Access-Control-Allow-Credentials", "true")
+    
     // SSE headers
     w.Header().Set("Content-Type", "text/event-stream")
     w.Header().Set("Cache-Control", "no-cache")
     w.Header().Set("Connection", "keep-alive")
-    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("X-Accel-Buffering", "no") // Disable proxy buffering
 
     metricsChan, err := h.controller.StreamLoadTestMetrics(r.Context(), testID)
     if err != nil {
@@ -252,6 +273,78 @@ func (h *LoadTestHandler) StreamMetrics(w http.ResponseWriter, r *http.Request) 
             }
 
             data, err := json.Marshal(metrics)
+            if err != nil {
+                continue
+            }
+
+            fmt.Fprintf(w, "data: %s\n\n", data)
+            flusher.Flush()
+
+        case <-r.Context().Done():
+            return
+        }
+    }
+}
+
+// Stream logs from a specific pod /api/v1/loadtests/pod/{podId}/logs/stream?token=JWT_TOKEN
+func (h *LoadTestHandler) StreamPodLogs(w http.ResponseWriter, r *http.Request) {
+    podID := chi.URLParam(r, "podId")
+    
+    token := r.URL.Query().Get("token")
+    if token == "" {
+        http.Error(w, "Token is required", http.StatusUnauthorized)
+        return
+    }
+    
+    _, err := auth.ValidateJWT(token)
+    if err != nil {
+        http.Error(w, "Invalid token", http.StatusUnauthorized)
+        return
+    }
+
+    // CORS and SSE headers
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Headers", "Cache-Control, Connection")
+    w.Header().Set("Access-Control-Expose-Headers", "Cache-Control, Connection")
+    w.Header().Set("Access-Control-Allow-Credentials", "true")
+    w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+    w.Header().Set("X-Accel-Buffering", "no")
+
+    logsChan, err := h.controller.StreamPodLogs(r.Context(), podID)
+    if err != nil {
+        http.Error(w, "Failed to start logs stream", http.StatusInternalServerError)
+        return
+    }
+
+    flusher, ok := w.(http.Flusher)
+    if !ok {
+        http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+        return
+    }
+
+    // init
+    fmt.Fprintf(w, "data: {\"type\":\"connected\",\"pod_id\":\"%s\",\"timestamp\":\"%s\"}\n\n", 
+        podID, time.Now().Format(time.RFC3339))
+    flusher.Flush()
+
+    for {
+        select {
+        case logLine, ok := <-logsChan:
+            if !ok {
+                fmt.Fprintf(w, "data: {\"type\":\"disconnected\",\"message\":\"Log stream ended\"}\n\n")
+                flusher.Flush()
+                return
+            }
+
+            logEntry := map[string]interface{}{
+                "pod_id":    podID,
+                "timestamp": time.Now().Format(time.RFC3339),
+                "message":   logLine,
+            }
+
+            data, err := json.Marshal(logEntry)
             if err != nil {
                 continue
             }

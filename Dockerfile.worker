@@ -1,8 +1,9 @@
 FROM alpine:latest
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache bash curl bc jq
 
 COPY loadtest-worker.sh /usr/local/bin/
+
 RUN chmod +x /usr/local/bin/loadtest-worker.sh
 
-ENTRYPOINT ["/usr/local/bin/loadtest-worker.sh"]
+ENTRYPOINT ["/bin/bash", "/usr/local/bin/loadtest-worker.sh"]
