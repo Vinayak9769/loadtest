@@ -1,7 +1,7 @@
 TODO:
 
-Add Detailed Metrics
+~~Add Detailed Metrics~~
 
-Improved pod cleanup
+~~Improved pod cleanup~~
 
-Sockets/SSE for realtime streaming
+~~Sockets/SSE for realtime streaming~~
