@@ -24,7 +24,6 @@ func NewLoadTestController(kubeClient kubernetes.Interface, namespace string) *L
 	if kubeClient == nil {
 		log.Println("Warning: LoadTestController initialized with nil Kubernetes client")
 	}
-
 	return &LoadTestController{
 		kubeClient: kubeClient,
 		namespace:  namespace,
@@ -72,7 +71,7 @@ func (c *LoadTestController) StartLoadTest(ctx context.Context, test *models.Loa
 						{
 							Name:  "loadtest-worker",
 							Image: "vinayak9769/loadtest-worker:latest",
-							Env:   env, 
+							Env:   env,
 						},
 					},
 				},
