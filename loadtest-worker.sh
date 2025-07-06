@@ -5,6 +5,8 @@ echo "Target URL: $TARGET_URL"
 echo "Duration: $DURATION_SECONDS seconds"
 echo "Requests per second: $REQUESTS_PER_SEC"
 echo "HTTP Method: $HTTP_METHOD"
+echo "HTTP Headers: $(echo "$HTTP_HEADERS" | tr '\n' ' ')"  
+echo "HTTP Body: $HTTP_BODY"
 
 apk add --no-cache bc jq >/dev/null 2>&1
 
@@ -43,7 +45,6 @@ log_metrics() {
     local current_time=$(date +%s)
     local elapsed=$((current_time - START_TIME))
 
-    # Safe defaults
     local avg_response_time="0.000"
     local error_rate="0.00"
     local rps="0.00"
@@ -81,13 +82,26 @@ EOF
     fi
 }
 
+HEADER_ARGS=()
+if [ -n "$HTTP_HEADERS" ]; then
+    IFS=$'\n'
+    for header in $(echo "$HTTP_HEADERS"); do
+        HEADER_ARGS+=("-H" "$header")
+    done
+    unset IFS
+fi
+
 while [ $(date +%s) -lt $END_TIME ]; do
     COUNTER=$((COUNTER + 1))
 
     if [ -n "$HTTP_METHOD" ] && [ "$HTTP_METHOD" != "GET" ]; then
-        RESPONSE=$(curl -s -w "%{http_code},%{time_total}" -X "$HTTP_METHOD" "$TARGET_URL" -o /dev/null)
+        if [ -n "$HTTP_BODY" ]; then
+            RESPONSE=$(curl -s -w "%{http_code},%{time_total}" -X "$HTTP_METHOD" "${HEADER_ARGS[@]}" -d "$HTTP_BODY" "$TARGET_URL" -o /dev/null)
+        else
+            RESPONSE=$(curl -s -w "%{http_code},%{time_total}" -X "$HTTP_METHOD" "${HEADER_ARGS[@]}" "$TARGET_URL" -o /dev/null)
+        fi
     else
-        RESPONSE=$(curl -s -w "%{http_code},%{time_total}" "$TARGET_URL" -o /dev/null)
+        RESPONSE=$(curl -s -w "%{http_code},%{time_total}" "${HEADER_ARGS[@]}" "$TARGET_URL" -o /dev/null)
     fi
 
     STATUS_CODE=$(echo "$RESPONSE" | cut -d',' -f1)
